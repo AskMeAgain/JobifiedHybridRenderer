@@ -141,7 +141,7 @@ namespace CustomRenderer.Unity.Rendering.Hybrid
             var gatherChunkRenderersJobHandle = gatherChunkRenderersJob.Schedule(chunkCount, 64);
             var sortedChunksJobHandle = sortedChunks.Schedule(gatherChunkRenderersJobHandle);
             sortedChunksJobHandle.Complete();
-            
+
             Profiler.EndSample();
 
             var sharedRenderCount = sortedChunks.SharedValueCount;
@@ -152,43 +152,8 @@ namespace CustomRenderer.Unity.Rendering.Hybrid
 
             Profiler.BeginSample("Add New Batches");
             {
-                var length = 500;
-                var job = new BatchingJob()
-                {
-                    NativeCount = new NativeArray<int>(1, Allocator.TempJob),
-                    NativeEditorRenderDataIndex = new NativeArray<int>(length, Allocator.TempJob),
-                    NativeDataArray1 = new NativeArray<int4>(length, Allocator.TempJob),
-                    NativeFlipped = new NativeArray<bool>(length, Allocator.TempJob),
-                    SharedRenderCount = sharedRenderCount,
-                    SharedRendererCounts = sharedRendererCounts,
-                    SortedChunkIndices = sortedChunkIndices,
-                    Chunks = chunks,
-                    MeshInstanceFlippedTagType = meshInstanceFlippedTagType,
-                    EditorRenderDataType = editorRenderDataType,
-                    RenderMeshType = RenderMeshType
-                };
-
-                job.Run();
-
-                for (int i = 0; i < job.NativeCount[0]; i++)
-                {
-                    var editorDataIndex = job.NativeEditorRenderDataIndex[i];
-                    EditorRenderData editorRenderData = m_DefaultEditorRenderData;
-
-                    if (editorDataIndex != -1)
-                    {
-                        editorRenderData = EntityManager.GetSharedComponentData<EditorRenderData>(editorDataIndex);
-                    }
-
-                    var data1 = job.NativeDataArray1[i];
-
-                    m_InstancedRenderMeshBatchGroup.AddBatch(tag, data1.x,
-                        data1.z, chunks, sortedChunkIndices, data1.y,
-                        data1.w, job.NativeFlipped[i],
-                        editorRenderData);
-                }
-
-                job.Dispose();
+                NewMethod(tag, chunks, sharedRendererCounts, sortedChunkIndices, sharedRenderCount, meshInstanceFlippedTagType, editorRenderDataType, RenderMeshType);
+                //OldMethod(tag, chunks, sharedRendererCounts, sortedChunkIndices, sharedRenderCount, meshInstanceFlippedTagType, editorRenderDataType, RenderMeshType);
             }
             Profiler.EndSample();
             m_InstancedRenderMeshBatchGroup.EndBatchGroup(tag, chunks, sortedChunkIndices);
@@ -197,11 +162,56 @@ namespace CustomRenderer.Unity.Rendering.Hybrid
             sortedChunks.Dispose();
         }
 
-        private void OldMethod(FrozenRenderSceneTag tag, NativeArray<ArchetypeChunk> chunks, int sharedRenderCount,
-                               NativeArray<int> sharedRendererCounts, NativeArray<int> sortedChunkIndices,
-                               ArchetypeChunkSharedComponentType<RenderMesh> RenderMeshType,
+        private void NewMethod(FrozenRenderSceneTag tag, NativeArray<ArchetypeChunk> chunks,
+                               NativeArray<int> sharedRendererCounts,
+                               NativeArray<int> sortedChunkIndices, int sharedRenderCount,
+                               ArchetypeChunkComponentType<RenderMeshFlippedWindingTag> meshInstanceFlippedTagType,
                                ArchetypeChunkSharedComponentType<EditorRenderData> editorRenderDataType,
-                               ArchetypeChunkComponentType<RenderMeshFlippedWindingTag> meshInstanceFlippedTagType)
+                               ArchetypeChunkSharedComponentType<RenderMesh> RenderMeshType)
+        {
+            var job = new BatchingJob()
+            {
+                NativeEditorRenderDataIndex = new NativeList<int>(Allocator.TempJob),
+                NativeDataArray1 = new NativeList<int4>(Allocator.TempJob),
+                NativeFlipped = new NativeList<bool>(Allocator.TempJob),
+                SharedRendererCounts = sharedRendererCounts,
+                SortedChunkIndices = sortedChunkIndices,
+                Chunks = chunks,
+                SharedRenderCount = sharedRenderCount,
+                MeshInstanceFlippedTagType = meshInstanceFlippedTagType,
+                EditorRenderDataType = editorRenderDataType,
+                RenderMeshType = RenderMeshType
+            };
+
+            job.Run();
+
+            for (int i = 0; i < job.NativeDataArray1.Length; i++)
+            {
+                var editorDataIndex = job.NativeEditorRenderDataIndex[i];
+                EditorRenderData editorRenderData = m_DefaultEditorRenderData;
+
+                if (editorDataIndex != -1)
+                {
+                    editorRenderData = EntityManager.GetSharedComponentData<EditorRenderData>(editorDataIndex);
+                }
+
+                var data1 = job.NativeDataArray1[i];
+
+                m_InstancedRenderMeshBatchGroup.AddBatch(tag, data1.x,
+                    data1.z, chunks, sortedChunkIndices, data1.y,
+                    data1.w, job.NativeFlipped[i],
+                    editorRenderData);
+            }
+
+            job.Dispose();
+        }
+
+        private void OldMethod(FrozenRenderSceneTag tag, NativeArray<ArchetypeChunk> chunks,
+                               NativeArray<int> sharedRendererCounts,
+                               NativeArray<int> sortedChunkIndices, int sharedRenderCount,
+                               ArchetypeChunkComponentType<RenderMeshFlippedWindingTag> meshInstanceFlippedTagType,
+                               ArchetypeChunkSharedComponentType<EditorRenderData> editorRenderDataType,
+                               ArchetypeChunkSharedComponentType<RenderMesh> RenderMeshType)
         {
             var sortedChunkIndex = 0;
             for (int i = 0; i < sharedRenderCount; i++)

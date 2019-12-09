@@ -10,12 +10,10 @@ namespace CustomRenderer.Unity.Rendering.Hybrid
     [BurstCompile]
     public struct BatchingJob : IJob, IDisposable
     {
-        [WriteOnly] public NativeArray<bool> NativeFlipped;
-        [WriteOnly] public NativeArray<int> NativeEditorRenderDataIndex;
-        [WriteOnly] public NativeArray<int4> NativeDataArray1;
+        [WriteOnly] public NativeList<bool> NativeFlipped;
+        [WriteOnly] public NativeList<int> NativeEditorRenderDataIndex;
+        [WriteOnly] public NativeList<int4> NativeDataArray1;
         
-        public NativeArray<int> NativeCount;
-
         [ReadOnly] public NativeArray<int> SortedChunkIndices;
         [ReadOnly] public int SharedRenderCount;
         [ReadOnly] public ArchetypeChunkComponentType<RenderMeshFlippedWindingTag> MeshInstanceFlippedTagType;
@@ -27,7 +25,6 @@ namespace CustomRenderer.Unity.Rendering.Hybrid
         public void Execute()
         {
             var sortedChunkIndex = 0;
-            var index = 0;
 
             for (int i = 0; i < SharedRenderCount; i++)
             {
@@ -75,19 +72,14 @@ namespace CustomRenderer.Unity.Rendering.Hybrid
                         sortedChunkIndex++;
                     }
 
-                    NativeFlipped[index] = flippedWinding;
+                    NativeFlipped.Add(flippedWinding);
 
-                    NativeDataArray1[index] = new int4(rendererSharedComponentIndex,
-                        startSortedIndex, instanceCount, batchChunkCount);
+                    NativeDataArray1.Add(new int4(rendererSharedComponentIndex,
+                        startSortedIndex, instanceCount, batchChunkCount));
 
-                    NativeEditorRenderDataIndex[index] = editorRenderDataIndex;
-
-                    index++;
+                    NativeEditorRenderDataIndex.Add(editorRenderDataIndex);
                 }
-            } 
-            
-            NativeCount[0] = index;
-
+            }
         }
 
         public void Dispose()
@@ -95,12 +87,6 @@ namespace CustomRenderer.Unity.Rendering.Hybrid
             NativeFlipped.Dispose();
             NativeEditorRenderDataIndex.Dispose();
             NativeDataArray1.Dispose();
-            NativeCount.Dispose();
-        }
-
-        public void Execute(int index)
-        {
-            throw new NotImplementedException();
         }
     }
 }
